@@ -297,19 +297,25 @@ function missionEnd(){
 /* ---------- rapport ---------- */
 function viewReport(){
   const t=totals();
-  if(!t.max){ $main.innerHTML=`<div class="prose"><h1>Rapport</h1><p class="lead">Aucune mission jouée pour l'instant.</p><button class="btn" id="b">Commencer</button></div>`; document.getElementById("b").onclick=()=>go("home"); return; }
+  const profile = PROFILES[state.profile || "complet"];
+  const doneCount = profile.missions.filter(n=>missionDone(M[n-1])).length;
+  const complete = doneCount === profile.missions.length;
+  const progress = `${complete ? "Parcours terminé" : "Parcours incomplet"} · ${doneCount}/${profile.missions.length} missions requises terminées`;
+  if(!t.max){ $main.innerHTML=`<div class="prose"><h1>Rapport</h1><p class="lead">${progress}</p><p>Aucune décision enregistrée pour l'instant.</p><button class="btn" id="b">Commencer</button></div>`; document.getElementById("b").onclick=()=>go("home"); return; }
   track("Rapport consulté");
-  const attMissions = state.profile ? PROFILES[state.profile].missions : M.map(m=>m.num);
-  const attOk = attMissions.every(n=>missionDone(M[n-1]));
-  const verdict = t.pct>=85?"Circuit maîtrisé":t.pct>=65?"Circuit à consolider":"Circuit à risque : reprise conseillée";
+  const [verdict, ringColor] = t.c.risque > 0 ? ["Circuit à risque : reprise conseillée", "#b13a2b"]
+    : !complete ? ["Parcours incomplet", "#5d6d6a"]
+    : t.pct >= 85 ? ["Circuit maîtrisé", "#1d7349"]
+    : t.pct >= 65 ? ["Circuit à consolider", "#9a6210"]
+    : ["Circuit à risque : reprise conseillée", "#b13a2b"];
   const C=2*Math.PI*54, off=C*(1-t.pct/100);
   const errs=[]; M.forEach(m=>{ const r=state.results[m.id]; if(!r) return; r.steps.forEach((s,i)=>{ if(s && ["risque","exces","trace"].includes(s.cat)) errs.push({m,s,i}); }); });
   const date=new Date().toLocaleDateString("fr-FR",{day:"numeric",month:"long",year:"numeric"});
   $main.innerHTML = `<div class="prose" style="max-width:none">
     <p class="eyebrow">Rapport de parcours · ${date}</p>
     <div class="score-head">
-      <svg class="ring" viewBox="0 0 130 130" role="img" aria-label="Score ${t.pct} %"><circle cx="65" cy="65" r="54" fill="none" stroke="#d6dfdc" stroke-width="12"/><circle cx="65" cy="65" r="54" fill="none" stroke="${t.pct>=85?"#1d7349":t.pct>=65?"#9a6210":"#b13a2b"}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/><text x="65" y="72" text-anchor="middle" font-family="Cabinet Grotesk, sans-serif" font-weight="800" font-size="30" fill="#11201e">${t.pct} %</text></svg>
-      <div><h1 style="margin-bottom:6px">${verdict}</h1><p class="lead" style="margin:0">${t.pts} points sur ${t.max} · parcours « ${esc(PROFILES[state.profile||"complet"].label)} »</p></div>
+      <svg class="ring" viewBox="0 0 130 130" role="img" aria-label="Score ${t.pct} %"><circle cx="65" cy="65" r="54" fill="none" stroke="#d6dfdc" stroke-width="12"/><circle cx="65" cy="65" r="54" fill="none" stroke="${ringColor}" stroke-width="12" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 65 65)"/><text x="65" y="72" text-anchor="middle" font-family="Cabinet Grotesk, sans-serif" font-weight="800" font-size="30" fill="#11201e">${t.pct} %</text></svg>
+      <div><h1 style="margin-bottom:6px">${verdict}</h1><p class="lead" style="margin:0">${t.pts} points sur ${t.max} · parcours « ${esc(profile.label)} »</p><p>${progress}</p></div>
     </div>
     <div class="grid-2" style="margin-bottom:24px">
       <div class="panel"><h3>Bilan des décisions</h3><ul class="counters">
@@ -322,11 +328,11 @@ function viewReport(){
     <h2>Points à revoir</h2>
     ${errs.length?`<ul class="errs">${errs.map(({m,s,i})=>`<li class="${s.cat}"><div class="m">Mission ${m.num} · ${esc(m.titre)} · ${CAT[s.cat].label}</div><p style="margin:4px 0"><b>${esc(s.q)}</b></p>${s.choix?`<p style="margin:4px 0">Votre choix : ${esc(s.choix)}</p>`:`<p style="margin:4px 0">${esc(s.detail||"")}</p>`}${s.attendu?`<p style="margin:4px 0"><b>Attendu :</b> ${esc(s.attendu)}</p>`:""}${refLink(s.ref)}</li>`).join("")}</ul>`:`<p>Aucune décision à risque, excessive ou d'écart de traçabilité. Bravo.</p>`}
     <div class="actions no-print" style="margin-top:24px">
-      ${attOk?`<button class="btn" id="att">Obtenir mon attestation</button>`:""}
-      <button class="btn ${attOk?"quiet":""}" id="pr">Imprimer le rapport</button>
+      ${complete?`<button class="btn" id="att">Obtenir mon attestation</button>`:""}
+      <button class="btn ${complete?"quiet":""}" id="pr">Imprimer le rapport</button>
       <button class="btn quiet" id="hm">Retour au circuit</button>
     </div>
-    <p style="font-size:13px;color:var(--muted);margin-top:18px">Ce rapport mesure des choix dans des scénarios fictifs. Il ne vaut ni validation des compétences ni validation par l'EOH. ${attOk?"L'attestation n'indique que le palier atteint.":"L'attestation sera proposée une fois toutes les missions du parcours terminées."}</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:18px">Ce rapport mesure des choix dans des scénarios fictifs. Il ne vaut ni validation des compétences ni validation par l'EOH. ${complete?"L'attestation n'indique que le palier atteint.":"L'attestation sera proposée une fois toutes les missions du parcours terminées."}</p>
   </div>`;
   document.getElementById("pr").addEventListener("click",()=>{ try{ window.print(); }catch(e){} });
   const att=document.getElementById("att"); att && att.addEventListener("click",()=>{ const tt=totals(); window.SGAttestation && window.SGAttestation.open({ jeu:"Retraitement des endoscopes", module:(state.profile||"complet")==="complet"?`parcours complet des ${M.length} missions`:`parcours « ${PROFILES[state.profile].label} »`, code:"END", color:"#0d5f5b", ratio: tt.pts/tt.max, critical: tt.c.risque, track: n=>{ if(TRACK_ON && TRACK_OK.test(n)) try{ window.plausible(n); }catch(e){} } }); });
