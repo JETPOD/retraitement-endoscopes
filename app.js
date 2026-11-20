@@ -25,7 +25,7 @@ function load(){ return null; }
 /* Mesure d'audience Plausible : schéma fermé, sans score ni réponse ni identifiant.
    Active uniquement sur jetpod.github.io/retraitement-endoscopes/. */
 const TRACK_ON = location.hostname==="jetpod.github.io" && location.pathname.startsWith("/retraitement-endoscopes/");
-const TRACK_OK = /^Endoscopes · (Jeu démarré|Rapport consulté|Profil (terrain|eoh|complet)|Mission [1-7] (démarrée|terminée))$/;
+const TRACK_OK = /^(Attestation · (Participation|Réussite|Excellence)|Endoscopes · (Jeu démarré|Rapport consulté|Profil (terrain|eoh|complet)|Mission [1-7] (démarrée|terminée)))$/;
 function track(name){
   const full="Endoscopes · "+name;
   if(!TRACK_ON || !TRACK_OK.test(full)) return;
@@ -299,6 +299,8 @@ function viewReport(){
   const t=totals();
   if(!t.max){ $main.innerHTML=`<div class="prose"><h1>Rapport</h1><p class="lead">Aucune mission jouée pour l'instant.</p><button class="btn" id="b">Commencer</button></div>`; document.getElementById("b").onclick=()=>go("home"); return; }
   track("Rapport consulté");
+  const attMissions = state.profile ? PROFILES[state.profile].missions : M.map(m=>m.num);
+  const attOk = attMissions.every(n=>missionDone(M[n-1]));
   const verdict = t.pct>=85?"Circuit maîtrisé":t.pct>=65?"Circuit à consolider":"Circuit à risque : reprise conseillée";
   const C=2*Math.PI*54, off=C*(1-t.pct/100);
   const errs=[]; M.forEach(m=>{ const r=state.results[m.id]; if(!r) return; r.steps.forEach((s,i)=>{ if(s && ["risque","exces","trace"].includes(s.cat)) errs.push({m,s,i}); }); });
@@ -320,12 +322,14 @@ function viewReport(){
     <h2>Points à revoir</h2>
     ${errs.length?`<ul class="errs">${errs.map(({m,s,i})=>`<li class="${s.cat}"><div class="m">Mission ${m.num} · ${esc(m.titre)} · ${CAT[s.cat].label}</div><p style="margin:4px 0"><b>${esc(s.q)}</b></p>${s.choix?`<p style="margin:4px 0">Votre choix : ${esc(s.choix)}</p>`:`<p style="margin:4px 0">${esc(s.detail||"")}</p>`}${s.attendu?`<p style="margin:4px 0"><b>Attendu :</b> ${esc(s.attendu)}</p>`:""}${refLink(s.ref)}</li>`).join("")}</ul>`:`<p>Aucune décision à risque, excessive ou d'écart de traçabilité. Bravo.</p>`}
     <div class="actions no-print" style="margin-top:24px">
-      <button class="btn" id="pr">Imprimer ou enregistrer en PDF</button>
+      ${attOk?`<button class="btn" id="att">Obtenir mon attestation</button>`:""}
+      <button class="btn ${attOk?"quiet":""}" id="pr">Imprimer le rapport</button>
       <button class="btn quiet" id="hm">Retour au circuit</button>
     </div>
-    <p style="font-size:13px;color:var(--muted);margin-top:18px">Ce rapport mesure des choix dans des scénarios fictifs. Il ne vaut ni attestation de compétence ni validation par l'EOH.</p>
+    <p style="font-size:13px;color:var(--muted);margin-top:18px">Ce rapport mesure des choix dans des scénarios fictifs. Il ne vaut ni validation des compétences ni validation par l'EOH. ${attOk?"L'attestation n'indique que le palier atteint.":"L'attestation sera proposée une fois toutes les missions du parcours terminées."}</p>
   </div>`;
   document.getElementById("pr").addEventListener("click",()=>{ try{ window.print(); }catch(e){} });
+  const att=document.getElementById("att"); att && att.addEventListener("click",()=>{ const tt=totals(); window.SGAttestation && window.SGAttestation.open({ jeu:"Retraitement des endoscopes", module:(state.profile||"complet")==="complet"?`parcours complet des ${M.length} missions`:`parcours « ${PROFILES[state.profile].label} »`, code:"END", color:"#0d5f5b", ratio: tt.pts/tt.max, critical: tt.c.risque, track: n=>{ if(TRACK_ON && TRACK_OK.test(n)) try{ window.plausible(n); }catch(e){} } }); });
   document.getElementById("hm").addEventListener("click",()=>go("home"));
 }
 
